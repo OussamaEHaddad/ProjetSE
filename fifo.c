@@ -3,9 +3,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/prctl.h>
-#include <string.h>
-#include <time.h>
 
 #define NUM_PROCESSES 10
 
@@ -16,48 +13,42 @@ struct Process {
     int priority;
 };
 
+// Function to compare processes based on entry time
 int compare_entry_time(const void *a, const void *b) {
     return ((struct Process *)a)->entry_time - ((struct Process *)b)->entry_time;
 }
 
 int main() {
-    // Make the parent process a subreaper
-    prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
-
     struct Process processes[NUM_PROCESSES];
-
-    srand(time(NULL));
-
     for (int i = 0; i < NUM_PROCESSES; i++) {
-        processes[i].id = i + 1;
-        processes[i].entry_time = rand() % 10;
-        processes[i].execution_time = rand() % 10 + 1;
-        processes[i].priority = rand() % 5;
+        if (scanf("%d %d %d %d", &processes[i].id, &processes[i].entry_time, &processes[i].execution_time, &processes[i].priority) != 4) {
+            fprintf(stderr, "Error reading process information.\n");
+            exit(1);
+        }
     }
 
     // Sort processes by entry time
     qsort(processes, NUM_PROCESSES, sizeof(struct Process), compare_entry_time);
 
+    printf("Processes received from the generator:\n");
     for (int i = 0; i < NUM_PROCESSES; i++) {
-        pid_t pid = fork();
-
-        if (pid < 0) {
-            perror("Fork failed");
-            exit(1);
-        } else if (pid == 0) { // Child process
-            printf("PID: %d, Entry Time: %d, Execution Time: %d, Priority: %d\n",
-                   getpid(), processes[i].entry_time, processes[i].execution_time, processes[i].priority);
-
-            // Simulate execution time
-            sleep(processes[i].execution_time);
-
-            printf("ID: %d has completed execution.\n", getpid());
-            exit(0);
-        } else {
-            int status;
-            waitpid(pid, &status, 0); // Wait for the child process to complete before forking the next one
-        }
+        printf("Process ID: %d, Entry Time: %d, Execution Time: %d, Priority: %d\n",
+               processes[i].id, processes[i].entry_time, processes[i].execution_time, processes[i].priority);
     }
+
+    printf("Scheduling processes using FIFO:\n");
+
+    int current_time = 0;
+    for (int i = 0; i < NUM_PROCESSES; i++) {
+        if (processes[i].entry_time > current_time) {
+            current_time = processes[i].entry_time;
+        }
+        printf("Executing Process ID: %d\n", processes[i].id);
+        sleep(processes[i].execution_time);
+        current_time += processes[i].execution_time;
+    }
+
+    printf("All processes have been scheduled and executed.\n");
 
     return 0;
 }
